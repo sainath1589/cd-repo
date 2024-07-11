@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+    parameters {
+        string(name: 'IMAGE_NAME') 
+        string(name: 'NAMESPACE')
+    }
+    environment {
+        GCLOUD_PROJECT = 'oval-cyclist-426414-p0' 
+        CLUSTER_NAME = 'cicd-cluster' 
+        CLUSTER_ZONE = 'europe-west1-b'
+        GCLOUD_CREDS=credentials('gcloud-creds')
+    }
+    stages {
+        stage('gitpull') {
+            steps {
+                git url: 'https://github.com/sainath1589/devops-automation.git', branch: 'main'
+            }
+        }
+        stage('Authenticate to GCP') {
+            steps {
+                withCredentials([file(credentialsId: 'gcloud-creds', variable: 'GCLOUD_CREDS')]) {
+                    sh '''
+                    gcloud version
+                    gcloud auth activate-service-account --key-file="$GCLOUD_CREDS"
+                    gcloud config set project $GCLOUD_PROJECT
+                    '''
+                }
+            }
+        }
+
+        stage('Validate Namespace Existence') {
+            steps {
+               script {
+                    def exists = sh(script: "kubectl get namespace ${NAMESPACE} -o yaml", returnStatus: true) == 0
+                    if (exists) {
+                        echo "Namespace '${NAMESPACE}' already exists."
+                    } else {
+                        sh(script: "kubectl create namespace ${NAMESPACE}", returnStatus: true)
+                        echo "Namespace '${NAMESPACE}' created."
+                    }
+                }
+            }
+        }
+        stage('Image Validation') {
+            steps {
+                script {
+                    def result = sh(returnStdout: true, script: "gcloud artifacts docker images list ${params.IMAGE_NAME} --include-tags")
+                    if (result.trim() != "") {
+                        echo "Image ${params.IMAGE_NAME} exists in Artifact Registry!"
+                    } else {
+                        error "Image ${params.IMAGE_NAME} does not exist in Artifact Registry."
+                        error "exit from the pipeline"
+                    }
+                }
+            }
+        }
+        stage('Deploy to k8s'){
+            steps{
+                sh '''
+                    gcloud auth activate-service-account --key-file="$GCLOUD_CREDS"
+                    gcloud config set compute/zone $CLUSTER_ZONE
+                    gcloud container clusters get-credentials $CLUSTER_NAME
+                    kubectl apply -f deploymentservice.yaml -n "${NAMESPACE}" 
+                    kubectl apply -f service.yaml -n "${NAMESPACE}" 
+                    kubectl apply -f ingress.yaml -n "${NAMESPACE}"
+                '''
+            }
+        }
+    } 
+    post {
+        success {
+            echo 'Pipeline succeeded!'
+            mail to: 'sainathreddy250@gmail.com',
+                 subject: "Pipeline Succeeded: ${currentBuild.fullDisplayName}",
+                 body: "The pipeline ${env.BUILD_URL} has successfully completed."
+        }
+        failure {
+            echo 'Pipeline failed!'
+            mail to: 'sainathreddy250@gmail.com',
+                 subject: "Pipeline Failed: ${currentBuild.fullDisplayName}",
+                 body: "The pipeline ${env.BUILD_URL} has failed. Check the logs for details."
+        }
+    }
+}
