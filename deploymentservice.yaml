@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment # Kubernetes resource kind we are creating
 metadata:
   name: java-deployment
-  namespace: testing
 spec:
   selector:
     matchLabels:
