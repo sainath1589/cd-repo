@@ -12,7 +12,7 @@ pipeline {
         GCLOUD_CREDS = credentials('gcloud-creds')
     }
     stages {
-        stage('gitpull') {
+        stage('code checkout') {
             steps {
                 git url: 'https://github.com/sainath1589/devops-automation.git', branch: 'main'
             }
@@ -28,7 +28,7 @@ pipeline {
                 }
             }
         }
-        stage('Validate Namespace Existence') {
+        stage('Validate Namespace Existence/Creation') {
             steps {
                script {
                     def exists = sh(script: "kubectl get namespace ${NAMESPACE} -o yaml", returnStatus: true) == 0
@@ -41,7 +41,7 @@ pipeline {
                 }
             }
         }
-        stage('Artifact image existance') {
+        stage('Artifact Image existance') {
             steps {
                 script {
                     def imageName = "${params.IMAGE_NAME}"
