@@ -1,14 +1,15 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'IMAGE_NAME') 
+        string(name: 'IMAGE_NAME')
         string(name: 'NAMESPACE')
+        string(name: 'TAGS')
     }
     environment {
-        GCLOUD_PROJECT = 'oval-cyclist-426414-p0' 
-        CLUSTER_NAME = 'cicd-cluster' 
-        CLUSTER_ZONE = 'europe-west1-b'
-        GCLOUD_CREDS=credentials('gcloud-creds')
+        GCLOUD_PROJECT = 'oval-cyclist-426414-p0'
+        CLUSTER_NAME = 'cicd-cluster'
+        CLUSTER_ZONE = 'europe-west1-c'
+        GCLOUD_CREDS = credentials('gcloud-creds')
     }
     stages {
         stage('gitpull') {
@@ -27,7 +28,6 @@ pipeline {
                 }
             }
         }
-
         stage('Validate Namespace Existence') {
             steps {
                script {
@@ -41,32 +41,34 @@ pipeline {
                 }
             }
         }
-        stage('Image Validation') {
+        stage('Artifact image existance') {
             steps {
                 script {
-                    def result = sh(returnStdout: true, script: "gcloud artifacts docker images list ${params.IMAGE_NAME} --include-tags")
+                    def imageName = "${params.IMAGE_NAME}"
+                    def imageTag = "${params.TAGS}"
+                    def fullImageName = "europe-west1-docker.pkg.dev/oval-cyclist-426414-p0/java-app/${IMAGE_NAME}"
+                    def result = sh(returnStdout: true, script: "gcloud artifacts files list --project=oval-cyclist-426414-p0 --repository=java-app --location=europe-west1 --package=${IMAGE_NAME} --tag=${TAGS}")
                     if (result.trim() != "") {
-                        echo "Image ${params.IMAGE_NAME} exists in Artifact Registry!"
+                        echo "Image ${IMAGE_NAME}:${TAGS} exists in Artifact Registry!"
                     } else {
-                        error "Image ${params.IMAGE_NAME} does not exist in Artifact Registry."
-                        error "exit from the pipeline"
+                        error "Image ${IMAGE_NAME}:${TAGS} does not exist in Artifact Registry. Aborting deployment."
                     }
                 }
             }
         }
-        stage('Deploy to k8s'){
-            steps{
+        stage('Deploy to k8s') {
+            steps {
                 sh '''
                     gcloud auth activate-service-account --key-file="$GCLOUD_CREDS"
                     gcloud config set compute/zone $CLUSTER_ZONE
                     gcloud container clusters get-credentials $CLUSTER_NAME
-                    kubectl apply -f deploymentservice.yaml -n "${NAMESPACE}" 
-                    kubectl apply -f service.yaml -n "${NAMESPACE}" 
+                    kubectl apply -f deploymentservice.yaml -n "${NAMESPACE}"
+                    kubectl apply -f service.yaml -n "${NAMESPACE}"
                     kubectl apply -f ingress.yaml -n "${NAMESPACE}"
                 '''
             }
         }
-    } 
+    }
     post {
         success {
             echo 'Pipeline succeeded!'
