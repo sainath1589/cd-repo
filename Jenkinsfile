@@ -56,7 +56,7 @@ pipeline {
                 }
             }
         }
-        stage('Deploy to k8s') {
+        stage('Deploy on Google Kubernetes Engine') {
             steps {
                 sh '''
                     gcloud auth activate-service-account --key-file="$GCLOUD_CREDS"
