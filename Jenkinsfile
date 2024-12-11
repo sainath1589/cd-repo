@@ -2,14 +2,14 @@ pipeline {
     agent any
     parameters {
         string(name: 'IMAGE_NAME')
-        string(name: 'NAMESPACE')
         string(name: 'TAGS')
     }
     environment {
-        GCLOUD_PROJECT = 'oval-cyclist-426414-p0'
+        GCLOUD_PROJECT = 'cranjana'
         CLUSTER_NAME = 'cicd-cluster'
-        CLUSTER_ZONE = 'europe-west1-c'
-        GCLOUD_CREDS = credentials('gcloud-creds')
+        CLUSTER_ZONE = 'us-central1-c'
+        GCLOUD_CREDS = credentials('cdjenkinskey')
+        
     }
     stages {
         stage('code checkout') {
@@ -18,26 +18,13 @@ pipeline {
             }
         }
         stage('Authenticate to GCP') {
-            steps {
-                withCredentials([file(credentialsId: 'gcloud-creds', variable: 'GCLOUD_CREDS')]) {
+          steps {
+                withCredentials([file(credentialsId: 'cdjenkinskey', variable: 'GCLOUD_KEYFILE_JSON')]) {
+                    echo 'Authenticating with Google Cloud using service account key...'
                     sh '''
-                    gcloud version
-                    gcloud auth activate-service-account --key-file="$GCLOUD_CREDS"
-                    gcloud config set project $GCLOUD_PROJECT
+                        gcloud version
+                        gcloud auth activate-service-account --key-file="$GCLOUD_KEYFILE_JSON"
                     '''
-                }
-            }
-        }
-        stage('Validate Namespace Existence/Creation') {
-            steps {
-               script {
-                    def exists = sh(script: "kubectl get namespace ${NAMESPACE} -o yaml", returnStatus: true) == 0
-                    if (exists) {
-                        echo "Namespace '${NAMESPACE}' already exists."
-                    } else {
-                        sh(script: "kubectl create namespace ${NAMESPACE}", returnStatus: true)
-                        echo "Namespace '${NAMESPACE}' created."
-                    }
                 }
             }
         }
@@ -46,8 +33,8 @@ pipeline {
                 script {
                     def imageName = "${params.IMAGE_NAME}"
                     def imageTag = "${params.TAGS}"
-                    def fullImageName = "europe-west1-docker.pkg.dev/oval-cyclist-426414-p0/java-app/${IMAGE_NAME}"
-                    def result = sh(returnStdout: true, script: "gcloud artifacts files list --project=oval-cyclist-426414-p0 --repository=java-app --location=europe-west1 --package=${IMAGE_NAME} --tag=${TAGS}")
+                    def fullImageName = "us-central1-docker.pkg.dev/cranjana/java-app/${IMAGE_NAME}"
+                    def result = sh(returnStdout: true, script: "gcloud artifacts files list --project=cranjana --repository=java-app --location=us-central1 --package=${IMAGE_NAME} --tag=${TAGS}")
                     if (result.trim() != "") {
                         echo "Image ${IMAGE_NAME}:${TAGS} exists in Artifact Registry!"
                     } else {
@@ -62,9 +49,9 @@ pipeline {
                     gcloud auth activate-service-account --key-file="$GCLOUD_CREDS"
                     gcloud config set compute/zone $CLUSTER_ZONE
                     gcloud container clusters get-credentials $CLUSTER_NAME
-                    kubectl apply -f deploymentservice.yaml -n "${NAMESPACE}"
-                    kubectl apply -f service.yaml -n "${NAMESPACE}"
-                    kubectl apply -f ingress.yaml -n "${NAMESPACE}"
+                    kubectl apply -f deploymentservice.yaml
+                    kubectl apply -f service.yaml 
+                    kubectl apply -f ingress.yaml 
                 '''
             }
         }
