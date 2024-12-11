@@ -9,4 +9,4 @@ spec:
     service:
       name: java-k8ssvc
       port:
-        number: 8080
+        number: 8081
